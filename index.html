@@ -1589,7 +1589,7 @@ function renderMatriz(){
     :'<div class="tsm tmut" style="padding:8px 0">Configure a matriz ideal para visualizar as vagas por setor.</div>';
 }
 
-function abrirMatrizSetor(id=null){
+function abrirMatriz(id=null){
   const setores=gSetores();
   document.getElementById('mz-setor').innerHTML='<option value="">Selecione...</option>'+setores.map(s=>`<option value="${s}">${s}</option>`).join('');
   document.getElementById('mz-id').value='';document.getElementById('mz-lid').value=1;document.getElementById('mz-op').value=4;
@@ -2718,7 +2718,7 @@ function renderConfiguracoes(){
     <div class="ir"><span class="il">Registros de férias</span><span class="iv">${fer.length}</span></div>
     <div class="ir"><span class="il">Histórico de movim.</span><span class="iv">${hist.length}</span></div>
     <div class="ir"><span class="il">Armazenamento</span><span class="iv">${Math.round(JSON.stringify(localStorage).length/1024)} KB</span></div>
-    <div class="ir"><span class="il">Versão</span><span class="iv">Portal DP v1.2</span></div>
+    <div class="ir"><span class="il">Versão</span><span class="iv">Portal DP v1.3</span></div>
   `;
 }
 

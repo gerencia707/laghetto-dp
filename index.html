@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -318,7 +319,7 @@ tbody td{padding:10px 12px;font-size:13px;color:var(--text2)}
     <div class="page" id="page-matriz">
       <div class="sh">
         <div class="shl"><span class="tsm tmut">Configure o quadro ideal por setor. O quadro atual é calculado automaticamente a partir dos colaboradores ativos.</span></div>
-        <button class="btn btn-p" onclick="abrirMatrizSetor()">+ Setor na matriz</button>
+        <button class="btn btn-p" onclick="abrirMatriz()">+ Setor na matriz</button>
       </div>
       <div class="sg" id="mz-stats" style="grid-template-columns:repeat(4,1fr)"></div>
       <div class="card">
@@ -532,6 +533,45 @@ tbody td{padding:10px 12px;font-size:13px;color:var(--text2)}
         </div>
       </div>
 
+      <!-- CHECKLIST DE DOCUMENTOS -->
+      <div class="card mt4">
+        <div class="card-hdr">
+          <span class="card-title">&#128203; Checklist de Admissão</span>
+        </div>
+        <div class="card-body" style="display:flex;flex-direction:column;gap:10px">
+          <div style="font-size:12px;color:var(--text3)">Documentos exigidos na admissão. Estes itens aparecem na tela de Documentos para cada colaborador.</div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <label style="display:flex;align-items:center;gap:10px;font-size:13px;cursor:pointer;font-weight:normal">
+              <input type="checkbox" id="cfg-doc-ctps" onchange="salvCfg()" checked> CTPS (Carteira de Trabalho)
+            </label>
+            <label style="display:flex;align-items:center;gap:10px;font-size:13px;cursor:pointer;font-weight:normal">
+              <input type="checkbox" id="cfg-doc-rg" onchange="salvCfg()" checked> RG / CPF
+            </label>
+            <label style="display:flex;align-items:center;gap:10px;font-size:13px;cursor:pointer;font-weight:normal">
+              <input type="checkbox" id="cfg-doc-res" onchange="salvCfg()" checked> Comprovante de residência
+            </label>
+            <label style="display:flex;align-items:center;gap:10px;font-size:13px;cursor:pointer;font-weight:normal">
+              <input type="checkbox" id="cfg-doc-foto" onchange="salvCfg()" checked> Foto 3x4
+            </label>
+            <label style="display:flex;align-items:center;gap:10px;font-size:13px;cursor:pointer;font-weight:normal">
+              <input type="checkbox" id="cfg-doc-aso" onchange="salvCfg()" checked> ASO admissional
+            </label>
+            <label style="display:flex;align-items:center;gap:10px;font-size:13px;cursor:pointer;font-weight:normal">
+              <input type="checkbox" id="cfg-doc-ficha" onchange="salvCfg()" checked> Ficha de registro
+            </label>
+            <label style="display:flex;align-items:center;gap:10px;font-size:13px;cursor:pointer;font-weight:normal">
+              <input type="checkbox" id="cfg-doc-pis" onchange="salvCfg()"> PIS / PASEP
+            </label>
+            <label style="display:flex;align-items:center;gap:10px;font-size:13px;cursor:pointer;font-weight:normal">
+              <input type="checkbox" id="cfg-doc-banco" onchange="salvCfg()"> Dados bancários
+            </label>
+            <label style="display:flex;align-items:center;gap:10px;font-size:13px;cursor:pointer;font-weight:normal">
+              <input type="checkbox" id="cfg-doc-cert" onchange="salvCfg()"> Certidão de nascimento dos filhos
+            </label>
+          </div>
+        </div>
+      </div>
+
       <!-- TIPOS DE EPI -->
       <div class="card mt4">
         <div class="card-hdr">
@@ -603,26 +643,38 @@ tbody td{padding:10px 12px;font-size:13px;color:var(--text2)}
 
 <!-- MODAL COLABORADOR -->
 <div class="mo" id="m-colab">
-  <div class="md" style="max-width:660px">
-    <div class="mh"><div class="mt" id="m-colab-t">Colaborador</div><button class="mc" onclick="fMo('m-colab')">✕</button></div>
+  <div class="md" style="max-width:700px">
+    <div class="mh"><div class="mt" id="m-colab-t">Colaborador</div><button class="mc" onclick="fMo('m-colab')">&#10005;</button></div>
     <div class="mb">
       <input type="hidden" id="c-id">
+
+      <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.7px;margin-bottom:10px">Identificacao</div>
       <div class="fg">
         <div class="fgr full"><label>Nome completo *</label><input type="text" id="c-nm" placeholder="Nome do colaborador"></div>
         <div class="fgr"><label>CPF</label><input type="text" id="c-cpf" oninput="mCPF(this)" placeholder="000.000.000-00"></div>
-        <div class="fgr"><label>Telefone / WhatsApp</label><input type="text" id="c-tel" placeholder="51999999999"></div>
-        <div class="fgr"><label>Função / Cargo *</label><input type="text" id="c-cargo" placeholder="Recepcionista, Camareira..."></div>
+        <div class="fgr"><label>PIS / PASEP</label><input type="text" id="c-pis" placeholder="000.00000.00-0"></div>
+        <div class="fgr"><label>Telefone / WhatsApp</label><input type="text" id="c-tel" placeholder="51 99999-9999"></div>
+        <div class="fgr"><label>E-mail</label><input type="email" id="c-email" placeholder="email@hotel.com"></div>
+      </div>
+
+      <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.7px;margin:14px 0 10px">Posicao</div>
+      <div class="fg">
+        <div class="fgr"><label>Cargo / Funcao *</label><input type="text" id="c-cargo" placeholder="Recepcionista, Camareira..."></div>
         <div class="fgr"><label>Setor *</label><select id="c-setor"><option value="">Selecione...</option></select></div>
-        <div class="fgr"><label>É líder do setor?</label>
-          <select id="c-lider"><option value="nao">Não</option><option value="sim">Sim — líder / supervisor</option></select>
+        <div class="fgr"><label>Lider do setor?</label>
+          <select id="c-lider"><option value="nao">Nao</option><option value="sim">Sim - lider / supervisor</option></select>
         </div>
-        <div class="fgr"><label>Data de admissão *</label><input type="date" id="c-adm" onchange="calcContrato()"></div>
+      </div>
+
+      <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.7px;margin:14px 0 10px">Contrato</div>
+      <div class="fg">
+        <div class="fgr"><label>Data de admissao *</label><input type="date" id="c-adm" onchange="calcContrato()"></div>
         <div class="fgr"><label>Tipo de contrato</label>
           <select id="c-contrato" onchange="calcContrato()">
-            <option value="clt">CLT — Efetivo</option>
-            <option value="experiencia">CLT — Experiência</option>
-            <option value="temporario">Temporário</option>
-            <option value="estagio">Estágio</option>
+            <option value="clt">CLT Efetivo</option>
+            <option value="experiencia">CLT Experiencia</option>
+            <option value="temporario">Temporario</option>
+            <option value="estagio">Estagio</option>
             <option value="aprendiz">Menor aprendiz</option>
             <option value="pj">PJ / Prestador</option>
           </select>
@@ -630,26 +682,80 @@ tbody td{padding:10px 12px;font-size:13px;color:var(--text2)}
         <div class="fgr"><label>Status</label>
           <select id="c-status">
             <option value="ativo">Ativo</option>
-            <option value="experiencia">Em experiência</option>
-            <option value="ferias">De férias</option>
+            <option value="experiencia">Em experiencia</option>
+            <option value="ferias">De ferias</option>
             <option value="afastado">Afastado</option>
             <option value="desligado">Desligado</option>
           </select>
         </div>
-        <div class="fgr"><label>Aniversário</label><input type="date" id="c-aniv"></div>
-        <div class="fgr"><label>Próximo ASO (exame)</label><input type="date" id="c-aso"></div>
-        <div class="fgr"><label>E-mail</label><input type="email" id="c-email" placeholder="email@hotel.com"></div>
+        <div class="fgr"><label>Proximo ASO</label><input type="date" id="c-aso"></div>
       </div>
+
       <div id="c-contrato-box" style="display:none;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:12px;margin-top:4px">
-        <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.7px;margin-bottom:8px">Contrato de experiência — datas calculadas</div>
+        <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.7px;margin-bottom:8px">Contrato de experiencia - datas calculadas</div>
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px" id="c-contrato-datas"></div>
       </div>
-      <div class="fgr full"><label>Documentos pendentes</label><input type="text" id="c-docs" placeholder="Ex: CTPS, RG, Comprovante residência..."></div>
-      <div class="fgr full"><label>Observações</label><textarea id="c-obs" style="min-height:52px"></textarea></div>
+
+      <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.7px;margin:14px 0 10px">Dados pessoais</div>
+      <div class="fg">
+        <div class="fgr"><label>Aniversario</label><input type="date" id="c-aniv"></div>
+        <div class="fgr"><label>Estado civil</label>
+          <select id="c-ecivil">
+            <option value="">Nao informado</option>
+            <option value="solteiro">Solteiro(a)</option>
+            <option value="casado">Casado(a)</option>
+            <option value="uniao_estavel">Uniao estavel</option>
+            <option value="divorciado">Divorciado(a)</option>
+            <option value="viuvo">Viuvo(a)</option>
+          </select>
+        </div>
+        <div class="fgr"><label>Escolaridade</label>
+          <select id="c-esc">
+            <option value="">Nao informado</option>
+            <option value="fund_incompleto">Fund. incompleto</option>
+            <option value="fund_completo">Fund. completo</option>
+            <option value="medio_incompleto">Medio incompleto</option>
+            <option value="medio_completo">Medio completo</option>
+            <option value="superior_incompleto">Superior incompleto</option>
+            <option value="superior_completo">Superior completo</option>
+            <option value="pos_graduacao">Pos-graduacao</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.7px;margin:14px 0 10px">Dados bancarios</div>
+      <div class="fg">
+        <div class="fgr"><label>Banco</label><input type="text" id="c-banco" placeholder="Ex: Caixa, Bradesco, Nubank..."></div>
+        <div class="fgr"><label>Agencia / Conta</label><input type="text" id="c-conta" placeholder="Ex: 1234 / 56789-0"></div>
+      </div>
+
+      <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.7px;margin:14px 0 10px">Dependentes</div>
+      <div class="fg">
+        <div class="fgr"><label>Possui filhos?</label>
+          <select id="c-filhos" onchange="togFilhos()">
+            <option value="nao">Nao</option>
+            <option value="sim">Sim</option>
+          </select>
+        </div>
+        <div class="fgr" id="c-nfilhos-grp" style="display:none">
+          <label>Qtd de filhos</label>
+          <input type="number" id="c-nfilhos" min="1" max="10" placeholder="1" oninput="renderIdadesFilhos()">
+        </div>
+      </div>
+      <div id="c-filhos-idades" style="display:none;margin-top:8px">
+        <div style="font-size:12px;color:var(--text3);margin-bottom:6px">Idade de cada filho (para salario familia)</div>
+        <div id="c-idades-grid" style="display:flex;gap:8px;flex-wrap:wrap"></div>
+      </div>
+
+      <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.7px;margin:14px 0 10px">Outros</div>
+      <div class="fg">
+        <div class="fgr full"><label>Documentos pendentes</label><input type="text" id="c-docs" placeholder="Ex: CTPS, comprovante residencia..."></div>
+        <div class="fgr full"><label>Observacoes</label><input type="text" id="c-obs" placeholder="Qualquer informacao relevante"></div>
+      </div>
     </div>
     <div class="mf">
       <button class="btn btn-s" onclick="fMo('m-colab')">Cancelar</button>
-      <button class="btn btn-p" onclick="salvColab()">Salvar</button>
+      <button class="btn btn-p" onclick="salvColab()">Salvar colaborador</button>
     </div>
   </div>
 </div>
@@ -1429,14 +1535,19 @@ function renderMatriz(){
     if(saldo>0)vagasAbertas+=saldo;
     const corSaldo=saldo>0?'neg':saldo<0?'ok':'zero';
     const saldoTxt=saldo>0?`-${saldo} vaga${saldo>1?'s':''} `:saldo<0?`+${Math.abs(saldo)} excesso`:' quadro completo';
-    return`<div class="matriz-row">
-      <div class="mz-cell"><span class="nm">${mz.setor}</span></div>
-      <div class="mz-cell center">${mz.lideal}</div>
-      <div class="mz-cell center">${atualLid}</div>
-      <div class="mz-cell center">${mz.oideal}</div>
-      <div class="mz-cell center">${atualOp}</div>
-      <div class="mz-cell mz-diff ${corSaldo}">${saldoTxt}</div>
-    </div>`;
+    const mzId = mz.id;
+    return '<div class="matriz-row">'
+      +'<div class="mz-cell"><span class="nm">'+mz.setor+'</span></div>'
+      +'<div class="mz-cell center">'+mz.lideal+'</div>'
+      +'<div class="mz-cell center">'+atualLid+'</div>'
+      +'<div class="mz-cell center">'+mz.oideal+'</div>'
+      +'<div class="mz-cell center">'+atualOp+'</div>'
+      +'<div class="mz-cell mz-diff '+corSaldo+'">'+saldoTxt+'</div>'
+      +'<div class="mz-cell center" style="gap:4px;display:flex;justify-content:center">'
+        +'<button class="btn btn-s btn-sm btn-ic" onclick="abrirMatriz('+String.fromCharCode(39)+mzId+String.fromCharCode(39)+')" title="Editar">&#9998;</button>'
+        +'<button class="btn btn-d btn-sm btn-ic" onclick="delMatriz('+String.fromCharCode(39)+mzId+String.fromCharCode(39)+')" title="Remover">&#10005;</button>'
+      +'</div>'
+    +'</div>';
   });
 
   // Linha de total
@@ -1733,6 +1844,14 @@ function calcDiasFerias(){
     const dias=Math.round((new Date(fim+'T12:00:00')-new Date(ini+'T12:00:00'))/86400000);
     document.getElementById('fer-dias').value=dias>0?dias+' dias corridos':'—';
   }
+}
+
+function delMatriz(id){
+  conf('Remover este setor da matriz?', function(){
+    sD('matriz', gD('matriz').filter(function(m){ return m.id !== id; }));
+    renderMatriz();
+    toast('Removido');
+  });
 }
 
 function abrirFerias(colabId=null){

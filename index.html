@@ -234,6 +234,13 @@ tbody td{padding:10px 12px;font-size:13px;color:var(--text2)}
 
 
 
+<!-- LOADING -->
+<div id="loading-overlay" style="display:none;position:fixed;inset:0;background:rgba(10,42,34,.85);z-index:99999;align-items:center;justify-content:center;flex-direction:column;gap:16px">
+  <div style="width:40px;height:40px;border:3px solid rgba(255,255,255,.2);border-top-color:#C7F1C5;border-radius:50%;animation:spin 1s linear infinite"></div>
+  <div style="color:#C7F1C5;font-size:14px;font-weight:500">Carregando dados...</div>
+</div>
+<style>@keyframes spin{to{transform:rotate(360deg)}}</style>
+
 <nav id="sidebar">
   <div class="sb-logo">
     <div class="brand">Portal DP</div>
@@ -250,6 +257,7 @@ tbody td{padding:10px 12px;font-size:13px;color:var(--text2)}
     <div class="ni" data-page="documentos" onclick="navTo(this)"><span class="ic">📄</span>Documentos</div>
     <div class="ni" data-page="epi" onclick="navTo(this)"><span class="ic">🦺</span>Fichas de EPI</div>
     <div class="ni" data-page="desligados" onclick="navTo(this)"><span class="ic">📦</span>Histórico de Desligados</div>
+    <div class="ni" data-page="organograma" onclick="navTo(this)"><span class="ic">&#9783;</span>Organograma</div>
     <div class="nav-sec">Sistema</div>
     <div class="ni" data-page="configuracoes" onclick="navTo(this)"><span class="ic">◎</span>Configurações</div>
   </div>
@@ -1157,20 +1165,351 @@ const SUPA_URL = 'https://opcfppuxssiykjrotrcw.supabase.co';
 const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9wY2ZwcHV4c3NpeWtqcm90cmN3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU0NzU2NjMsImV4cCI6MjEwMTA1MTY2M30.fN5ek2xDgY-FKviSzBBDUzF4KqddjAZGCaLXyKuCZ8U';
 const supa = supabase.createClient(SUPA_URL, SUPA_KEY);
 
-/* ===== STORAGE LOCAL ===== */
-const DB={
-  get(k){try{return JSON.parse(localStorage.getItem('dp_'+k))||[];}catch{return[];}},
-  set(k,v){localStorage.setItem('dp_'+k,JSON.stringify(v));},
-  gO(k,d={}){try{return JSON.parse(localStorage.getItem('dp_'+k))||d;}catch{return d;}},
-  sO(k,v){localStorage.setItem('dp_'+k,JSON.stringify(v));}
+/* ===== STORAGE — Cache local + Supabase sync ===== */
+
+// Mapeamento: chave local → tabela Supabase + campo ID
+const TBMAP = {
+  colabs:       { tb:'dp_colaboradores', id:'id' },
+  candidatos:   { tb:'dp_candidatos',    id:'id' },
+  matriz:       { tb:'dp_matriz',        id:'id' },
+  ferias:       { tb:'dp_ferias',        id:'id' },
+  historico:    { tb:'dp_historico',     id:'id' },
+  docs_colabs:  { tb:'dp_documentos',    id:'id' },
+  epi_tipos:    { tb:'dp_epi_tipos',     id:'id' },
+  epi_entregas: { tb:'dp_epi_entregas',  id:'id' },
+  desligados:   { tb:'dp_desligamentos', id:'id' },
+  cargos:       { tb:'dp_cargos',        id:'id' }
 };
-const gD=k=>DB.get(k);const sD=(k,v)=>DB.set(k,v);
+
+// Cache em memória — alimentado pelo Supabase ao iniciar
+const _cache = {};
+
+// Ler do cache (síncrono — usado em todo o sistema)
+function gD(k){ return _cache[k] ? JSON.parse(JSON.stringify(_cache[k])) : []; }
+
+// Salvar no cache E sincronizar com Supabase (assíncrono)
+function sD(k, v){
+  _cache[k] = v;
+  syncSupabase(k, v);
+}
+
+// Config (objeto único, não array)
+const _cfgCache = {};
+const DB = {
+  gO: function(k, def){ return Object.keys(_cfgCache).length ? Object.assign({}, def||{}, _cfgCache) : (def||{}); },
+  sO: function(k, v){ Object.assign(_cfgCache, v); syncConfig(v); }
+};
+
+// Sincronizar array com Supabase — upsert de todos os registros
+async function syncSupabase(k, v){
+  const map = TBMAP[k];
+  if(!map) return;
+  try {
+    // Deletar registros que não existem mais no array local
+    const ids = v.map(function(r){ return r.id; }).filter(Boolean);
+    if(ids.length > 0){
+      await supa.from(map.tb).upsert(
+        v.map(function(r){ return supaRow(k, r); }),
+        { onConflict: 'id' }
+      );
+    } else {
+      // Array vazio — deletar tudo da tabela (só quando explicitamente zerado)
+    }
+  } catch(e){ console.warn('Supabase sync erro ('+k+'):', e.message); }
+}
+
+// Converter objeto local para formato Supabase
+function supaRow(k, r){
+  if(k === 'colabs'){
+    return {
+      id: r.id, nome: r.nome, cpf: r.cpf||null, pis: r.pis||null,
+      email: r.email||null, tel: r.tel||null,
+      cargo: r.cargo||null, setor_slug: slugSetor(r.setor),
+      lider: r.lider==='sim', adm: r.adm||null,
+      contrato: r.contrato||'clt', status: r.status||'ativo',
+      aniv: r.aniv||null, ecivil: r.ecivil||null, esc: r.esc||null,
+      banco: r.banco||null, conta: r.conta||null,
+      filhos: r.filhos==='sim', n_filhos: parseInt(r.nfilhos)||0,
+      idades_filhos: r.idadesFilhos||null,
+      aso: r.aso||null, docs_pendentes: r.docs||null, obs: r.obs||null
+    };
+  }
+  if(k === 'candidatos'){
+    return {
+      id: r.id, nome: r.nome, cargo: r.cargo||null,
+      setor_slug: slugSetor(r.setor), tel: r.tel||null,
+      etapa: r.etapa||'documentos', origem: r.origem||'indicacao',
+      data_entrada: r.data||null, prev_inicio: r.prev||null,
+      obs: r.obs||null, colab_id: r.colabId||null
+    };
+  }
+  if(k === 'ferias'){
+    return {
+      id: r.id, colab_id: r.colabId,
+      setor_slug: getColabSetor(r.colabId),
+      data_ini: r.ini, data_fim: r.fim,
+      status: r.status||'programada', obs: r.obs||null
+    };
+  }
+  if(k === 'historico'){
+    return {
+      id: r.id, colab_id: r.colabId,
+      setor_slug: getColabSetor(r.colabId),
+      tipo: r.tipo||'outro', descricao: r.desc||null,
+      data: r.data||new Date().toISOString().slice(0,10)
+    };
+  }
+  if(k === 'docs_colabs'){
+    return {
+      id: r.id, colab_id: r.colabId,
+      setor_slug: getColabSetor(r.colabId),
+      ctps: r.itens&&r.itens.ctps||false,
+      rg_cpf: r.itens&&r.itens.rg_cpf||false,
+      comp_res: r.itens&&r.itens.comp_res||false,
+      foto: r.itens&&r.itens.foto||false,
+      aso_adm: r.itens&&r.itens.aso_adm||false,
+      ficha_reg: r.itens&&r.itens.ficha_reg||false
+    };
+  }
+  if(k === 'epi_tipos'){
+    return {
+      id: r.id, nome: r.nome, ca: r.ca||null,
+      val_meses: r.valMeses||null, setores: r.setores||null
+    };
+  }
+  if(k === 'epi_entregas'){
+    return {
+      id: r.id, colab_id: r.colabId,
+      setor_slug: getColabSetor(r.colabId),
+      tipo_id: r.tipoId||null, tipo_nome: r.tipo||'',
+      ca: r.ca||null, entrega: r.entrega||null,
+      validade: r.validade||null, revisao: r.revisao||null,
+      assin: r.assin||'pendente', obs: r.obs||null
+    };
+  }
+  if(k === 'desligados'){
+    return {
+      id: r.id, colab_id: r.colabId,
+      setor_slug: slugSetor(r.snap&&r.snap.setor),
+      snap_nome: r.snap&&r.snap.nome||'',
+      snap_cpf: r.snap&&r.snap.cpf||null,
+      snap_pis: r.snap&&r.snap.pis||null,
+      snap_cargo: r.snap&&r.snap.cargo||null,
+      snap_setor: r.snap&&r.snap.setor||null,
+      snap_adm: r.snap&&r.snap.adm||null,
+      snap_contrato: r.snap&&r.snap.contrato||null,
+      snap_banco: r.snap&&r.snap.banco||null,
+      snap_conta: r.snap&&r.snap.conta||null,
+      data_deslig: r.dataDeslig||null,
+      motivo: r.motivo||'outro',
+      dias_aviso: r.diasAviso||0,
+      data_homolog: r.homolog||null,
+      fer_dias: r.ferDias||0, fer_prop: r.ferProp||0,
+      fer_terco: r.ferTerco||'sim',
+      epis_devolvidos: r.episDevolvidos||null,
+      doc_ctps: r.docs&&r.docs.ctps||false,
+      doc_trct: r.docs&&r.docs.trct||false,
+      doc_saldo: r.docs&&r.docs.saldo||false,
+      doc_fgts: r.docs&&r.docs.fgts||false,
+      doc_seg: r.docs&&r.docs.seg||false,
+      doc_inf: r.docs&&r.docs.inf||false,
+      obs: r.obs||null
+    };
+  }
+  if(k === 'cargos'){
+    return { id: r.id, nome: r.nome, setor_slug: slugSetor(r.setor) };
+  }
+  if(k === 'matriz'){
+    return {
+      id: r.id, setor_slug: slugSetor(r.setor),
+      lideres_ideal: r.lideal||1, oper_ideal: r.oideal||4
+    };
+  }
+  return r;
+}
+
+async function syncConfig(v){
+  try {
+    const { data } = await supa.from('dp_config').select('id').limit(1).single();
+    if(data){
+      await supa.from('dp_config').update({
+        hotel: v.hotel, uhs: v.uhs, cidade: v.cidade,
+        regional: v.regional, gm: v.gm,
+        sf_teto: v.sfTeto, sf_valor: v.sfValor,
+        fer_dias_padrao: v.ferDias, alerta_contrato: v.alertaDias,
+        alerta_aso: v.asoAlerta, drive_epi_url: v.driveEPI||''
+      }).eq('id', data.id);
+    } else {
+      await supa.from('dp_config').insert({
+        hotel: v.hotel||'Laghetto Pedras Altas', uhs: v.uhs||171,
+        cidade: v.cidade||'Canela - RS', gm: v.gm||'',
+        sf_teto: v.sfTeto||1800, sf_valor: v.sfValor||59,
+        fer_dias_padrao: v.ferDias||15, alerta_contrato: v.alertaDias||15,
+        alerta_aso: v.asoAlerta||30, drive_epi_url: v.driveEPI||''
+      });
+    }
+  } catch(e){ console.warn('Config sync erro:', e.message); }
+}
+
+// Helpers
+function slugSetor(nome){
+  if(!nome) return 'administrativo';
+  const map = {
+    'Manutenção':'manutencao','Governança':'governanca',
+    'Recepção':'recepcao','A&B':'ab','Cozinha':'cozinha',
+    'Lazer':'lazer','Administrativo':'administrativo','Reservas':'reservas'
+  };
+  return map[nome] || nome.toLowerCase().normalize('NFD').replace(/[^a-z0-9]/g,'');
+}
+function getColabSetor(colabId){
+  const c = (_cache.colabs||[]).find(function(x){ return x.id===colabId; });
+  return c ? slugSetor(c.setor) : 'administrativo';
+}
+
+// Converter linha do Supabase para formato local
+function fromSupaColab(r){
+  const SETOR_NOME = {
+    manutencao:'Manutenção',governanca:'Governança',recepcao:'Recepção',
+    ab:'A&B',cozinha:'Cozinha',lazer:'Lazer',administrativo:'Administrativo',reservas:'Reservas'
+  };
+  return {
+    id:r.id, nome:r.nome, cpf:r.cpf||'', pis:r.pis||'',
+    email:r.email||'', tel:r.tel||'',
+    cargo:r.cargo||'', setor:SETOR_NOME[r.setor_slug]||r.setor_slug||'',
+    lider:r.lider?'sim':'nao', adm:r.adm||'',
+    contrato:r.contrato||'clt', status:r.status||'ativo',
+    aniv:r.aniv||'', ecivil:r.ecivil||'', esc:r.esc||'',
+    banco:r.banco||'', conta:r.conta||'',
+    filhos:r.filhos?'sim':'nao', nfilhos:r.n_filhos||0,
+    idadesFilhos:r.idades_filhos||[],
+    aso:r.aso||'', docs:r.docs_pendentes||'', obs:r.obs||''
+  };
+}
+function fromSupaCand(r){
+  const SETOR_NOME = {
+    manutencao:'Manutenção',governanca:'Governança',recepcao:'Recepção',
+    ab:'A&B',cozinha:'Cozinha',lazer:'Lazer',administrativo:'Administrativo',reservas:'Reservas'
+  };
+  return {
+    id:r.id, nome:r.nome, cargo:r.cargo||'',
+    setor:SETOR_NOME[r.setor_slug]||r.setor_slug||'',
+    tel:r.tel||'', etapa:r.etapa||'documentos',
+    origem:r.origem||'indicacao', data:r.data_entrada||'',
+    prev:r.prev_inicio||'', obs:r.obs||'', colabId:r.colab_id||null
+  };
+}
+function fromSupaFerias(r){
+  return { id:r.id, colabId:r.colab_id, ini:r.data_ini, fim:r.data_fim, status:r.status||'programada', obs:r.obs||'' };
+}
+function fromSupaHist(r){
+  return { id:r.id, colabId:r.colab_id, tipo:r.tipo, desc:r.descricao||'', data:r.data };
+}
+function fromSupaDocs(r){
+  return { id:r.id, colabId:r.colab_id, itens:{ ctps:r.ctps, rg_cpf:r.rg_cpf, comp_res:r.comp_res, foto:r.foto, aso_adm:r.aso_adm, ficha_reg:r.ficha_reg } };
+}
+function fromSupaEPITipo(r){
+  return { id:r.id, nome:r.nome, ca:r.ca||'', valMeses:r.val_meses||null, setores:r.setores||[] };
+}
+function fromSupaEPIEntrega(r){
+  return { id:r.id, colabId:r.colab_id, tipoId:r.tipo_id||null, tipo:r.tipo_nome, ca:r.ca||'', entrega:r.entrega||'', validade:r.validade||'', revisao:r.revisao||'', assin:r.assin||'pendente', obs:r.obs||'' };
+}
+function fromSupaDeslig(r){
+  return {
+    id:r.id, colabId:r.colab_id,
+    snap:{ nome:r.snap_nome, cpf:r.snap_cpf, pis:r.snap_pis, cargo:r.snap_cargo, setor:r.snap_setor, adm:r.snap_adm, contrato:r.snap_contrato, banco:r.snap_banco, conta:r.snap_conta },
+    dataDeslig:r.data_deslig, motivo:r.motivo, diasAviso:r.dias_aviso||0,
+    homolog:r.data_homolog||'', ferDias:r.fer_dias||0, ferProp:r.fer_prop||0, ferTerco:r.fer_terco||'sim',
+    episDevolvidos:r.epis_devolvidos||[],
+    docs:{ ctps:r.doc_ctps, trct:r.doc_trct, saldo:r.doc_saldo, fgts:r.doc_fgts, seg:r.doc_seg, inf:r.doc_inf },
+    obs:r.obs||''
+  };
+}
+function fromSupaCargo(r){
+  const SETOR_NOME = {manutencao:'Manutenção',governanca:'Governança',recepcao:'Recepção',ab:'A&B',cozinha:'Cozinha',lazer:'Lazer',administrativo:'Administrativo',reservas:'Reservas'};
+  return { id:r.id, nome:r.nome, setor:SETOR_NOME[r.setor_slug]||r.setor_slug||'' };
+}
+function fromSupaMatriz(r){
+  const SETOR_NOME = {manutencao:'Manutenção',governanca:'Governança',recepcao:'Recepção',ab:'A&B',cozinha:'Cozinha',lazer:'Lazer',administrativo:'Administrativo',reservas:'Reservas'};
+  return { id:r.id, setor:SETOR_NOME[r.setor_slug]||r.setor_slug, lideal:r.lideres_ideal||1, oideal:r.oper_ideal||4 };
+}
+
+// Carregar todos os dados do Supabase para o cache ao iniciar
+async function carregarDoSupabase(){
+  document.getElementById('loading-overlay').style.display='flex';
+  try {
+    const [
+      colabs, candidatos, ferias, hist, docs,
+      epiTipos, epiEntregas, deslig, cargos, matriz, cfg
+    ] = await Promise.all([
+      supa.from('dp_colaboradores').select('*').neq('status','desligado'),
+      supa.from('dp_candidatos').select('*'),
+      supa.from('dp_ferias').select('*'),
+      supa.from('dp_historico').select('*'),
+      supa.from('dp_documentos').select('*'),
+      supa.from('dp_epi_tipos').select('*'),
+      supa.from('dp_epi_entregas').select('*'),
+      supa.from('dp_desligamentos').select('*'),
+      supa.from('dp_cargos').select('*').eq('ativo',true),
+      supa.from('dp_matriz').select('*'),
+      supa.from('dp_config').select('*').limit(1).maybeSingle()
+    ]);
+
+    _cache.colabs       = (colabs.data||[]).map(fromSupaColab);
+    _cache.candidatos   = (candidatos.data||[]).map(fromSupaCand);
+    _cache.ferias       = (ferias.data||[]).map(fromSupaFerias);
+    _cache.historico    = (hist.data||[]).map(fromSupaHist);
+    _cache.docs_colabs  = (docs.data||[]).map(fromSupaDocs);
+    _cache.epi_tipos    = (epiTipos.data||[]).map(fromSupaEPITipo);
+    _cache.epi_entregas = (epiEntregas.data||[]).map(fromSupaEPIEntrega);
+    _cache.desligados   = (deslig.data||[]).map(fromSupaDeslig);
+    _cache.cargos       = (cargos.data||[]).map(fromSupaCargo);
+    _cache.matriz       = (matriz.data||[]).map(fromSupaMatriz);
+
+    // Setores do Supabase
+    const setoresRes = await supa.from('dp_setores').select('nome').eq('ativo',true).order('nome');
+    if(setoresRes.data && setoresRes.data.length){
+      _cache.setores_arr = { list: setoresRes.data.map(function(s){ return s.nome; }) };
+    }
+
+    // Config
+    if(cfg.data){
+      const c = cfg.data;
+      Object.assign(_cfgCache, {
+        hotel:c.hotel||'Laghetto Pedras Altas', uhs:c.uhs||171,
+        cidade:c.cidade||'Canela - RS', regional:c.regional||'',
+        gm:c.gm||'', sfTeto:c.sf_teto||1800, sfValor:c.sf_valor||59,
+        ferDias:c.fer_dias_padrao||15, alertaDias:c.alerta_contrato||15,
+        asoAlerta:c.alerta_aso||30, driveEPI:c.drive_epi_url||''
+      });
+    }
+
+    console.log('Supabase: dados carregados com sucesso');
+    console.log('Colabs:', _cache.colabs.length, '| Candidatos:', _cache.candidatos.length);
+  } catch(e){
+    console.error('Erro ao carregar do Supabase:', e);
+    alert('Erro ao conectar com o banco de dados. Verifique a conexão.');
+  } finally {
+    document.getElementById('loading-overlay').style.display='none';
+  }
+}
 
 
 
 const SETORES_DEFAULT=['Recepção','A&B','Governança','Lazer','Manutenção','Cozinha','Administrativo','Reservas'];
-const gSetores=()=>{const s=DB.gO('setores_arr',null);return s?s.list:SETORES_DEFAULT;};
-const sSetores=v=>DB.sO('setores_arr',{list:v});
+function gSetores(){
+  return _cache.setores_arr ? _cache.setores_arr.list : SETORES_DEFAULT;
+}
+function sSetores(v){
+  _cache.setores_arr = {list:v};
+  // Sync setores no Supabase
+  supa.from('dp_setores').select('nome').then(function(res){
+    var existentes = (res.data||[]).map(function(s){ return s.nome; });
+    var novos = v.filter(function(n){ return !existentes.includes(n); });
+    var removidos = existentes.filter(function(n){ return !v.includes(n); });
+    if(novos.length) supa.from('dp_setores').insert(novos.map(function(n){ return {nome:n, slug:n.toLowerCase().normalize('NFD').replace(/[^a-z0-9]/g,'')}; }));
+    if(removidos.length) supa.from('dp_setores').update({ativo:false}).in('nome',removidos);
+  });
+}
 
 /* ===== UTILS ===== */
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2);
@@ -2850,7 +3189,7 @@ function renderConfiguracoes(){
     <div class="ir"><span class="il">Registros de férias</span><span class="iv">${fer.length}</span></div>
     <div class="ir"><span class="il">Histórico de movim.</span><span class="iv">${hist.length}</span></div>
     <div class="ir"><span class="il">Armazenamento</span><span class="iv">${Math.round(JSON.stringify(localStorage).length/1024)} KB</span></div>
-    <div class="ir"><span class="il">Versão</span><span class="iv">Portal DP v1.4</span></div>
+    <div class="ir"><span class="il">Versão</span><span class="iv">Portal DP v1.5</span></div>
   `;
 }
 
@@ -2954,7 +3293,7 @@ if(!gD('cargos').length){
     {id:uid(),nome:'Menor aprendiz',setor:'Administrativo'}
   ]);
 }
-renderDash();
+carregarDoSupabase().then(function(){ renderDash(); });
 </script>
 </body>
 </html>
